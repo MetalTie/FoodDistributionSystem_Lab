@@ -13,11 +13,11 @@ import (
     "time"
     
     "FoodDistributionSystem_Lab/food"
-    "FoodDistributionSystem_Lab/circularque"
+    "FoodDistributionSystem_Lab/storage" // updated import
 )
 
 type GateKeeper struct {
-    queue          *circularque.CircularQue[food.FoodPack]
+    storage        *storage.SortedList // Changed from circularque
     acceptChan     chan food.FoodPack
     retrieveChan   chan retrieveRequest
     rejected       int
@@ -32,7 +32,7 @@ type retrieveRequest struct {
 
 func NewGateKeeper(capacity int) *GateKeeper {
     gk := &GateKeeper{
-        queue:        circularque.NewCircularQue[food.FoodPack](capacity),
+        storage:        storage.NewSortedList(capacity), // use sorted list
         acceptChan:   make(chan food.FoodPack, 100),
         retrieveChan: make(chan retrieveRequest, 100),
         rejected:     0,
@@ -66,8 +66,8 @@ func (gk *GateKeeper) run() {
     for gk.rejected < 5 && time.Now().Before(gk.endTime) {
         select {
         case newFood := <-gk.acceptChan:
-            if !gk.queue.IsFull() {
-                gk.queue.AcceptMessage(newFood)
+            if !gk.storage.IsFull() {
+                // gk.storage.AcceptMessage(newFood)
                 fmt.Printf("GateKeeper insert accepted %s %c\n", newFood.FoodType, newFood.FoodShipment)
             } else {
                 gk.rejected++
@@ -77,17 +77,17 @@ func (gk *GateKeeper) run() {
             }
             
         case req := <-gk.retrieveChan:
-            if !gk.queue.IsEmpty() {
-                foodItem, _ := gk.queue.RetrieveMessage()
+            if !gk.storage.IsEmpty() {
+                // foodItem, _ := gk.storage.RetrieveMessage()
                 
                 // Generate desired food type for management reporting
                 mgtDesiredType := food.RandomFoodType()
                 fmt.Printf("Mgt Desired Food Type To Sell is: %s\n", mgtDesiredType)
-                fmt.Printf("Actual type sold is: %s\n", foodItem.FoodType)
+                // fmt.Printf("Actual type sold is: %s\n", foodItem.FoodType)
                 fmt.Printf("Food pack removed by GateKeeper for shipment.\n\n")
                 
                 req.available <- true
-                req.response <- foodItem
+                // req.response <- foodItem
             } else {
                 req.available <- false
             }

@@ -1,6 +1,6 @@
 // The software suite consists of main.go,
 // food, stats, gatekeeper,
-// producer, circularque, and sales packages.
+// producer, storage, and sales packages.
 //
 // This represents the software to manage an "embedded" planetary system
 // food receiving and distribution system.
