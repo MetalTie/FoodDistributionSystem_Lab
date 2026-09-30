@@ -12,7 +12,7 @@ package storage // Changed the name to better fit the function of this package
 
 import (
     "errors"
-    // "fmt"
+    "fmt"
     "sync"
 
     "FoodDistributionSystem_Lab/food" // Added this to grab from the food package
@@ -77,28 +77,78 @@ func (sl *SortedList) findInsertPosition(item food.FoodPack) int {
     return sl.size  // Insert at end
 }
 
-// Sequential search (C Option requirement)
-func (sl *SortedList) FindSequential(desiredType food.FoodType) (food.FoodPack, int, error) {
+// Binary search for efficient lookup (B Option)
+func (sl *SortedList) FindBinary(desiredType food.FoodType) (food.FoodPack, int, error) {
     sl.mutex.Lock()
     defer sl.mutex.Unlock()
     
-    for i := 0; i < sl.size; i++ {
-        if sl.items[i].FoodType == desiredType {
-            found := sl.items[i]
-            sl.removeAtIndex(i)
-            return found, i, nil
+    if sl.size == 0 {
+        return food.FoodPack{}, -1, errors.New("storage is empty")
+    }
+    
+    low, high := 0, sl.size-1
+    
+    // Search for meat version first
+    if found, index, err := sl.binarySearchForType(desiredType, 'M', low, high); err == nil {
+        return found, index, nil
+    }
+    
+    // Search for grain/vegetable version
+    if found, index, err := sl.binarySearchForType(desiredType, 'B', low, high); err == nil {
+        return found, index, nil
+    }
+    
+    // Not found, return last item with apology
+    lastIndex := sl.size - 1
+    lastItem := sl.items[lastIndex]
+    sl.removeAtIndex(lastIndex)
+    
+    fmt.Printf("Sorry, no food packets of the %s type are currently available\n", desiredType)
+    return lastItem, lastIndex, errors.New("desired type not available")
+}
+
+// Helper function for binary search
+func (sl *SortedList) binarySearchForType(desiredType food.FoodType, shipment byte, low, high int) (food.FoodPack, int, error) {
+    target := food.FoodPack{
+        FoodType:     desiredType,
+        FoodShipment: shipment,
+    }
+    
+    for low <= high {
+        mid := low + (high-low)/2
+        current := sl.items[mid]
+        
+        comparison := sl.compare(current, target)
+        
+        if comparison == 0 {
+            // Found exact match
+            found := current
+            sl.removeAtIndex(mid)
+            return found, mid, nil
+        } else if comparison < 0 {
+            low = mid + 1
+        } else {
+            high = mid - 1
         }
     }
     
-    // Not found, return last item if available
-    if sl.size > 0 {
-        last := sl.items[sl.size-1]
-        sl.removeAtIndex(sl.size-1)
-        return last, sl.size-1, errors.New("desired type not available")
+    return food.FoodPack{}, -1, errors.New("not found")
+}
+
+// Comparison function for FoodPack items
+func (sl *SortedList) compare(a, b food.FoodPack) int {
+    // Meat comes before grain/vegetable
+    if a.FoodShipment != b.FoodShipment {
+        if a.FoodShipment == 'M' {
+            return -1
+        }
+        return 1
     }
     
-    return food.FoodPack{}, -1, errors.New("storage is empty")
+    // Same shipment type, compare by food type
+    return int(a.FoodType) - int(b.FoodType)
 }
+
 // Remove element at index efficiently
 func (sl *SortedList) removeAtIndex(index int) {
     if index < 0 || index >= sl.size {
@@ -140,24 +190,25 @@ func (sl *SortedList) Size() int {
     defer sl.mutex.RUnlock()
     return sl.size
 }
+// AcceptMessage handles incoming food packages and inserts them into storage.
+func (sl *SortedList) AcceptMessage(item food.FoodPack) error {
+	// Reuses your existing thread-safe Insert logic
+	err := sl.Insert(item)
+	if err != nil {
+		return fmt.Errorf("AcceptMessage failed: %w", err)
+	}
+	return nil
+}
 
-// func (q *CircularQue[T]) AcceptMessage(msg T) error {
-//     if q.mesnum >= q.capacity {
-//         return errors.New("ERROR - Message rejected - queue is full!")
-//     }
-//     q.rear = (q.rear + 1) % q.capacity
-//     q.box[q.rear] = msg
-//     q.mesnum++
-//     return nil
-// }
+// RetrieveMessage searches for a specific food type and retrieves it.
+// If the desired type isn't available, it falls back to your FindBinary fallback behavior.
+func (sl *SortedList) RetrieveMessage(desiredType food.FoodType) (food.FoodPack, error) {
+	// Reuses your binary search logic
+	item, _, err := sl.FindBinary(desiredType)
+	if err != nil && err.Error() != "desired type not available" {
+		return food.FoodPack{}, fmt.Errorf("RetrieveMessage failed: %w", err)
+	}
 
-// func (q *CircularQue[T]) RetrieveMessage() (T, error) {
-//     var zero T
-//     if q.mesnum <= 0 {
-//         return zero, errors.New("ERROR - No message in the queue to retrieve!")
-//     }
-//     q.front = (q.front + 1) % q.capacity
-//     msg := q.box[q.front]
-//     q.mesnum--
-//     return msg, nil
-// }
+	// Returns the found item or the fallback item (when desired type is missing)
+	return item, nil
+}
