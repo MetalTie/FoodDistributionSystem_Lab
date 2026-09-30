@@ -67,7 +67,7 @@ func (gk *GateKeeper) run() {
         select {
         case newFood := <-gk.acceptChan:
             if !gk.storage.IsFull() {
-                // gk.storage.AcceptMessage(newFood)
+                gk.storage.AcceptMessage(newFood)
                 fmt.Printf("GateKeeper insert accepted %s %c\n", newFood.FoodType, newFood.FoodShipment)
             } else {
                 gk.rejected++
